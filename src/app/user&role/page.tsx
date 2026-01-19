@@ -1,53 +1,56 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import {
-  fetchUsers,
-  deleteUser as deleteUserAction,
-} from "@/app/actions/users/user-services";
-import type { User } from "@/types/dashboard/user";
-import { Skeleton } from "@/components/ui/skeleton";
 import AdvancedTable from "@/components/table/advanced-table";
-import { getUserColumns } from "@/components/table/columns/users-column";
 import { selectionColumn } from "@/components/table/selection-column";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { X, Plus } from "lucide-react";
+
+import { fetchUsers, createUser, updateUser, deleteUser, User } from "@/app/actions/users/user-services";
+import { getUserColumns } from "@/components/table/columns/users-column";
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
-  const router = useRouter();
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
-  const { data, isLoading, isError, error: _error, isFetching } = useQuery<User[]>({
+  // Modal and form state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [form, setForm] = useState({
+    username: "",
+    email: "",
+    password: "",
+    role: "user",
+  });
+
+  // Fetch users
+  const { data, isLoading, isError, error, isFetching } = useQuery<User[]>({
     queryKey: ["users"],
     queryFn: fetchUsers,
   });
 
-  const users = data ?? [];
+  console.log('Users:', )
 
+  const users = Array.isArray(data) ? data : [];
+
+  // Delete mutation
   const { mutate: deleteUserMutate } = useMutation({
-    mutationFn: (id: string) => deleteUserAction(id),
+    mutationFn: (id: number) => deleteUser(id),
     onSuccess: () => {
       toast.success("User deleted successfully!");
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (err: unknown) =>
-      toast.error(
-        err instanceof Error ? err.message : "Failed to delete user"
-      ),
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Failed to delete user");
+    },
   });
 
   const handleDeleteUser = useCallback(
-    (id: string) => {
-      deleteUserMutate(id);
+    (id: number) => {
+      if (confirm("Are you sure you want to delete this user?")) {
+        deleteUserMutate(id);
+      }
     },
     [deleteUserMutate]
   );
@@ -57,17 +60,14 @@ export default function UsersPage() {
       if (!selectedUsers.length) return;
 
       const results = await Promise.allSettled(
-        selectedUsers.map((user) => deleteUserAction(user.id.toString()))
+        selectedUsers.map((u) => deleteUser(u.id))
       );
 
-      const hasFailure = results.some((result) => result.status === "rejected");
-
+      const hasFailure = results.some((r) => r.status === "rejected");
       if (hasFailure) {
-        toast.error("Failed to delete some users. Please try again.");
+        toast.error("Failed to delete some users.");
       } else {
-        toast.success(
-          `${selectedUsers.length} user${selectedUsers.length === 1 ? "" : "s"} deleted successfully!`
-        );
+        toast.success(`${selectedUsers.length} user(s) deleted successfully!`);
       }
 
       queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -75,43 +75,43 @@ export default function UsersPage() {
     [queryClient]
   );
 
-  const handleAssignRole = useCallback((user: User) => {
-    setSelectedUser(user);
-    setSelectedRoles(user.roles || []);
-    setIsRoleDialogOpen(true);
-  }, []);
+  // Table columns using our reusable function
+  const columns = getUserColumns({ onEdit: openModal, onDelete: handleDeleteUser });
 
-  const handleRoleAssignment = useCallback(async () => {
-    if (!selectedUser) return;
-
-    try {
-      // Here you would call the assign role API
-      // For now, we'll just show a success message
-      toast.success(`Roles assigned to ${selectedUser.username}`);
-      setIsRoleDialogOpen(false);
-      setSelectedUser(null);
-      setSelectedRoles([]);
-      queryClient.invalidateQueries({ queryKey: ["users"] });
-    } catch (error) {
-      toast.error("Failed to assign roles");
+  // Open modal for create/edit
+  function openModal(user?: User) {
+    if (user) {
+      setEditingUser(user);
+      setForm({
+        username: user.username,
+        email: user.email,
+        password: "",
+        role: user.role,
+      });
+    } else {
+      setEditingUser(null);
+      setForm({ username: "", email: "", password: "", role: "user" });
     }
-  }, [selectedUser, queryClient]);
+    setModalOpen(true);
+  }
 
-  const handleEditUser = useCallback((user: User) => {
-    router.push(`/user&role/${user.id}/edit`);
-  }, [router]);
-
-  const columns = useMemo(
-    () => [
-      selectionColumn<User>(),
-      ...getUserColumns({
-        onEdit: handleEditUser,
-        onDelete: handleDeleteUser,
-        onAssignRole: handleAssignRole,
-      }),
-    ],
-    [handleEditUser, handleDeleteUser, handleAssignRole]
-  );
+  // Handle form submit
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editingUser) {
+        await updateUser(editingUser.id, form);
+        toast.success("User updated successfully!");
+      } else {
+        await createUser(form);
+        toast.success("User created successfully!");
+      }
+      setModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save user");
+    }
+  };
 
   const emptyState = (
     <div className="flex flex-col items-center justify-center space-y-3 py-12">
@@ -125,85 +125,41 @@ export default function UsersPage() {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M19 8v6M22 11h-6" />
+          <path d="M3 5h18M7 5V3h10v2m1 0v16H6V5h12Z" />
+          <path d="M10 11v6M14 11v6" />
         </svg>
       </div>
       <div className="text-center space-y-1">
         <p className="text-sm font-medium">No users found</p>
         <p className="text-xs text-muted-foreground">
-          Add your first user to get started.
+          Adjust your filters or try a different search term.
         </p>
       </div>
     </div>
   );
 
-  if (isLoading)
-    return (
-      <div className="space-y-6 animate-pulse">
-        <Card className="p-6">
-          <div className="space-y-3">
-            <Skeleton className="h-8 w-64 rounded-md" />
-            <Skeleton className="h-4 w-1/3 rounded-md" />
-          </div>
-        </Card>
-        <Card>
-          <CardHeader>
-            <Skeleton className="mb-2 h-6 w-56 rounded-md" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {[...Array(8)].map((_, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between border-b border-border py-3"
-                >
-                  <Skeleton className="h-4 w-1/4 rounded" />
-                  <Skeleton className="h-4 w-1/6 rounded" />
-                  <Skeleton className="h-4 w-1/5 rounded" />
-                  <Skeleton className="h-4 w-10 rounded" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-
-  if (isError)
-    return (
-      <p className="text-red-500">
-        Error: {error?.message || "Failed to load users"}
-      </p>
-    );
-
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-col gap-1">
+        <CardHeader className="flex flex-col gap-2">
           <CardTitle className="text-2xl font-semibold text-text">Users & Roles</CardTitle>
-          <div className="flex flex-row justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Manage users, assign roles, and control access permissions.
-              </p>
-            </div>
-            <div>
-              <button
-                onClick={() => router.push("/user&role/add")}
-                className="bg-blue-600 text-white border-2 border-blue-600 rounded-md px-4 py-2 hover:bg-blue-700 transition-colors"
-              >
-                Add User
-              </button>
-            </div>
+          <p className="text-sm text-muted-foreground">
+            Manage users and assign roles in your system.
+          </p>
+          <div className="flex justify-end">
+            <button
+              onClick={() => openModal()}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+            >
+              <Plus className="h-4 w-4" /> New User
+            </button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <AdvancedTable<User>
-            columns={columns}
+            columns={[selectionColumn<User>(), ...columns]}
             data={users}
-            searchPlaceholder="users"
+            searchPlaceholder="Search users"
             searchColumn="username"
             onDeleteSelected={handleBulkDelete}
             isClickable={false}
@@ -215,45 +171,71 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* Role Assignment Dialog */}
-      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Roles to {selectedUser?.username}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="roles">Select Roles</Label>
-              <Select
-                value={selectedRoles.join(',')}
-                onValueChange={(value) => setSelectedRoles(value ? value.split(',') : [])}
+      {/* Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-lg w-full max-w-md p-6 relative">
+            <button
+              onClick={() => setModalOpen(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="text-xl font-bold mb-4">
+              {editingUser ? "Edit User" : "Create User"}
+            </h2>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              <input
+                type="text"
+                placeholder="Username"
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+                required
+                className="border px-3 py-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+                className="border px-3 py-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                className="border px-3 py-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                {...(!editingUser ? { required: true } : {})}
+              />
+              <select
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+                className="border px-3 py-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select roles" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="teacher">Teacher</SelectItem>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="parent">Parent</SelectItem>
-                  <SelectItem value="staff">Staff</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsRoleDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleRoleAssignment}>
-                Assign Roles
-              </Button>
-            </div>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+              <div className="flex justify-end gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="px-3 py-2 bg-red-800 rounded hover:bg-gray-400 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                >
+                  {editingUser ? "Update" : "Create"}
+                </button>
+              </div>
+            </form>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }

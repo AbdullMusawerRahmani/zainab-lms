@@ -4,14 +4,15 @@ export type Student = {
   last_name: string;
   father_name: string;
   grand_father_name: string;
-  image: string;
-  dob: string; 
+  image: string | File;
+  dob: string;
+  age: string;
   gender: "male" | "female";
   address: string;
   primary_mobile: string;
   secondary_mobile?: string;
   email: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "pending" | "blocked" | "deleted";
   country: string;
   current_province: string;
   main_province: string;

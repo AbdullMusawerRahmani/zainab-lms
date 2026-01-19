@@ -1,102 +1,78 @@
-import NextAuth, { DefaultSession } from "next-auth";
+import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
-// Extend the built-in session types
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string;
-      role: string;
-    } & DefaultSession["user"]
-  }
-
-  interface User {
-    role: string;
-  }
-}
-
-declare module "next-auth/jwt" {
-  interface JWT {
-    role: string;
-  }
-}
-
-export default NextAuth({
+const handler = NextAuth({
   providers: [
     CredentialsProvider({
-      name: "credentials",
+      name: "Django",
       credentials: {
-        email: { label: "Email", type: "email" },
+        username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+        const res = await fetch("http://127.0.0.1:8005/api/token/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username: credentials?.username,
+            password: credentials?.password,
+          }),
+        });
 
-        try {
-          // For demo purposes, using simple credential check
-          // In production, you should validate against your backend
-          const email = credentials.email;
-          const password = credentials.password;
+        if (!res.ok) return null;
 
-          // Demo credentials check
-          if (email === "admin@zainablms.com" && password === "admin123") {
+        const data = await res.json();
+
+        if (data.access) {
             return {
-              id: "1",
-              email: "admin@zainablms.com",
-              name: "Admin User",
-              role: "admin",
+              id: data.user?.id ?? 0,
+              access: data.access,
+              refresh: data.refresh,
+              exp: data.exp, // if you decode it later
+              user: data.user ?? null,
             };
           }
+          
 
-          // You can add more demo users or integrate with your actual auth system
-          if (email === "teacher@zainablms.com" && password === "teacher123") {
-            return {
-              id: "2",
-              email: "teacher@zainablms.com",
-              name: "Teacher User",
-              role: "teacher",
-            };
-          }
-
-          if (email === "student@zainablms.com" && password === "student123") {
-            return {
-              id: "3",
-              email: "student@zainablms.com",
-              name: "Student User",
-              role: "student",
-            };
-          }
-
-          return null;
-        } catch (error) {
-          console.error("Auth error:", error);
-          return null;
-        }
+        return null;
       },
     }),
   ],
+
   session: {
     strategy: "jwt",
   },
+
   callbacks: {
     async jwt({ token, user }) {
+      // First login
       if (user) {
-        token.role = user.role;
+        token.access = (user as any).access;
+        token.refresh = (user as any).refresh;
+        token.exp = (user as any).exp;
+        token.user = (user as any).user;
       }
+  
       return token;
     },
+  
+
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.sub!;
-        session.user.role = token.role as string;
-      }
-      return session;
-    },
+        session.access = token.access as string;
+        session.refresh = token.refresh as string;
+        session.exp = token.exp as number;
+        session.user = token.user as any;
+      
+        return session;
+      },
+      
   },
+
   pages: {
-    signIn: "/auth/login",
-    error: "/auth/login",
+    signIn: "/login",
   },
 });
+
+export { handler as GET, handler as POST };

@@ -150,22 +150,20 @@ export default function StudentsPage() {
       <Card>
         <CardHeader className="flex flex-col gap-1">
           <CardTitle className="text-2xl font-semibold text-text">Students</CardTitle>
-          <div className="flex flex-row justify-between">
-         
-            <div> 
-          <p className="text-sm text-muted-foreground">
-            Filter, sort, and manage student records in one place.
-          </p>
-          </div>
-             <div>
-              <button
-                onClick={() => router.push("/students/add")}
-                className="bg-blue-600 text-white border-2 border-blue-600 rounded-md px-4 py-2 hover:bg-blue-700 transition-colors"
-              >
-                Add Student
-              </button>
-            </div>
-          </div>
+          
+          <div className="flex w-full justify-between">
+        <p className="text-sm text-muted-foreground">
+          Filter, sort, and manage student records in one place.
+        </p>
+
+        <button
+          onClick={() => router.push("/students/add")}
+          className="rounded-md border-2 border-blue-600 bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+        >
+          Add Student
+        </button>
+      </div>
+
         </CardHeader>
         <CardContent className="space-y-4">
           <AdvancedTable<Student>

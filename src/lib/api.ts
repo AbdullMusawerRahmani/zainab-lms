@@ -2,17 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-const token=process.env.TOKEN
+import { getAccessToken } from "@/hooks/useAccessToken"; // client hook
 
-// Use your .env variable directly
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8005/api/v1";
 
-interface FetchOptions extends RequestInit {
-  requiresAuth?: boolean;
-  revalidate?: boolean;
-  path?: string;
-  hasFile?: boolean;
+interface FetchOptions extends Omit<RequestInit, 'body'> {
+  requiresAuth?: boolean;       // automatically attach token
+  token?: string;               // manually provide token (for server actions)
+  revalidate?: boolean;         // revalidate path
+  path?: string;                // path to revalidate
+  hasFile?: boolean;            // send FormData
   headers?: Record<string, string>;
+  body?: BodyInit | Record<string, any> | null;
 }
 
 // Standard API response
@@ -28,6 +29,7 @@ export async function fetchAPI<T>(
 ): Promise<ApiResponse<T>> {
   const {
     requiresAuth = true,
+    token,
     revalidate = false,
     path = "/",
     headers = {},
@@ -40,30 +42,58 @@ export async function fetchAPI<T>(
   try {
     const requestHeaders: Record<string, string> = { ...headers };
 
-    // If not uploading a file, default Content-Type to JSON
-    if (!hasFile && !requestHeaders["Content-Type"]) {
-      requestHeaders["Content-Type"] = "application/json";
-    }
-    if (requiresAuth) {
-        const access_token = token;
-        requestHeaders["Authorization"] = `Bearer ${access_token}`;
+    // Prepare body
+    let processedBody = restOptions.body;
+
+    // Convert object to FormData if hasFile
+    if (hasFile && processedBody && typeof processedBody === 'object' && !(processedBody instanceof FormData)) {
+      const formData = new FormData();
+      Object.entries(processedBody).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          formData.append(key, value instanceof File ? value : String(value));
+        }
+      });
+      processedBody = formData;
     }
 
+    // Convert object to JSON if not FormData
+    if (!hasFile && processedBody && typeof processedBody === 'object' && !(processedBody instanceof FormData)) {
+      processedBody = JSON.stringify(processedBody);
+      if (!requestHeaders["Content-Type"]) {
+        requestHeaders["Content-Type"] = "application/json";
+      }
+    }
+
+    // Attach Authorization header
+    let accessToken = token ?? null;
+
+    if (requiresAuth && !accessToken) {
+      // Only attempt getAccessToken if running in client
+      try {
+        accessToken = await getAccessToken();
+      } catch {
+        console.warn("No access token available for server-side fetch");
+      }
+    }
+
+    if (accessToken) {
+      requestHeaders["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    // Make the API request
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...restOptions,
       headers: requestHeaders,
+      body: processedBody as BodyInit | null,
     });
 
-    // Log non-ok responses
-    if (!response.ok) {
-      await logErrorResponse(response);
-    }
+    // Handle errors
+    if (!response.ok) await logErrorResponse(response);
 
-    // Handle status-specific cases
     switch (response.status) {
       case 204: // No Content
         return { success: true, data: undefined };
-      case 401: // Unauthorized
+      case 401:
         isUnauthorized = true;
         return { success: false, error: "Unauthorized" };
       case 400:
@@ -82,10 +112,8 @@ export async function fetchAPI<T>(
       }
     }
 
-    // Parse JSON safely
     const data = await safeJsonParse(response);
 
-    // Trigger revalidation if required
     if (revalidate) {
       revalidatePath(path);
     }
@@ -102,8 +130,6 @@ export async function fetchAPI<T>(
 }
 
 // --- Helpers ---
-
-// Safe JSON parse to avoid crashes
 const safeJsonParse = async (response: Response) => {
   try {
     return await response.json();
@@ -112,7 +138,6 @@ const safeJsonParse = async (response: Response) => {
   }
 };
 
-// Log errors to console with full info
 const logErrorResponse = async (response: Response) => {
   try {
     const text = await response.clone().text();

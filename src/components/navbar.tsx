@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sun, Moon, GraduationCap } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { Sun, Moon, GraduationCap, Globe, User, Bell, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Theme = "light" | "dark";
+type Language = "en" | "ar";
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
@@ -16,8 +19,21 @@ function getInitialTheme(): Theme {
     : "light";
 }
 
+function getInitialLanguage(): Language {
+  if (typeof window === "undefined") return "en";
+  const stored = window.localStorage.getItem("language");
+  if (stored === "en" || stored === "ar") return stored;
+  return "en";
+}
+
 export function Navbar() {
   const [theme, setTheme] = useState<Theme>("light");
+  const [language, setLanguage] = useState<Language>("en");
+  const { data: session, status } = useSession();
+  const pathname = usePathname();
+
+  const isAuthenticated = status === "authenticated" && !!session;
+  const isLoginPage = pathname === "/";
 
   useEffect(() => {
     const initial = getInitialTheme();
@@ -27,6 +43,14 @@ export function Navbar() {
     else root.classList.remove("dark");
   }, []);
 
+  useEffect(() => {
+    const initial = getInitialLanguage();
+    setLanguage(initial);
+    const html = document.documentElement;
+    if (initial === "ar") html.setAttribute("dir", "rtl");
+    else html.setAttribute("dir", "ltr");
+  }, []);
+
   const toggleTheme = () => {
     setTheme((prev) => {
       const next: Theme = prev === "light" ? "dark" : "light";
@@ -34,6 +58,17 @@ export function Navbar() {
       if (next === "dark") root.classList.add("dark");
       else root.classList.remove("dark");
       window.localStorage.setItem("theme", next);
+      return next;
+    });
+  };
+
+  const toggleLanguage = () => {
+    setLanguage((prev) => {
+      const next: Language = prev === "en" ? "ar" : "en";
+      const html = document.documentElement;
+      if (next === "ar") html.setAttribute("dir", "rtl");
+      else html.setAttribute("dir", "ltr");
+      window.localStorage.setItem("language", next);
       return next;
     });
   };
@@ -61,33 +96,100 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <nav className="hidden items-center gap-4 text-xs font-medium text-muted-foreground sm:flex sm:text-sm">
-            <Link href="/" className="hover:text-foreground">
-              Dashboard
-            </Link>
-            <Link href="/students" className="hover:text-foreground">
-              Students
-            </Link>
-            <Link href="/classes" className="hover:text-foreground">
-              Classes
-            </Link>
-          </nav>
+          {/* Navigation Links - Show only when authenticated and not on login page */}
+          {isAuthenticated && !isLoginPage && (
+            <nav className="hidden items-center gap-4 text-xs font-medium text-muted-foreground sm:flex sm:text-sm">
+              <Link href="/overview" className="hover:text-foreground transition-colors">
+                Overview
+              </Link>
+              <Link href="/students" className="hover:text-foreground transition-colors">
+                Students
+              </Link>
+              <Link href="/classes" className="hover:text-foreground transition-colors">
+                Classes
+              </Link>
+            </nav>
+          )}
 
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            className={cn(
-              "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80",
-              "bg-background text-foreground shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1">
+            {/* Language Toggle - Always show */}
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              aria-label="Toggle language"
+              className={cn(
+                "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80",
+                "bg-background text-foreground shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+              )}
+            >
+              <Globe className="h-4 w-4" />
+              <span className="sr-only">
+                {language === "en" ? "Switch to Arabic" : "Switch to English"}
+              </span>
+            </button>
+
+            {/* Theme Toggle - Always show */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              className={cn(
+                "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80",
+                "bg-background text-foreground shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+              )}
+            >
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </button>
+
+            {/* Authenticated-only buttons - Show only when logged in and not on login page */}
+            {isAuthenticated && !isLoginPage && (
+              <>
+                {/* Notifications */}
+                <button
+                  type="button"
+                  aria-label="Notifications"
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80",
+                    "bg-background text-foreground shadow-sm transition-colors hover:bg-primary/10 hover:text-primary",
+                    "relative"
+                  )}
+                >
+                  <Bell className="h-4 w-4" />
+                  {/* Notification dot */}
+                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 border-2 border-background"></span>
+                </button>
+
+                {/* Settings */}
+                <button
+                  type="button"
+                  aria-label="Settings"
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80",
+                    "bg-background text-foreground shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+                  )}
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+
+                {/* User Profile */}
+                <button
+                  type="button"
+                  aria-label="User profile"
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80",
+                    "bg-background text-foreground shadow-sm transition-colors hover:bg-primary/10 hover:text-primary"
+                  )}
+                >
+                  <User className="h-4 w-4" />
+                </button>
+              </>
             )}
-          >
-            {theme === "dark" ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
-          </button>
+          </div>
         </div>
       </div>
     </header>

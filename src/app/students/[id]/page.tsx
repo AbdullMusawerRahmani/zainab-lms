@@ -5,10 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   BadgeCheck,
+  BookHeart,
+  BookHeartIcon,
   CalendarDays,
   Flag,
   Globe2,
   IdCard,
+  LucideBookHeart,
   Mail,
   MapPin,
   Phone,
@@ -125,6 +128,7 @@ export default function StudentDetailPage() {
               <div className="grid gap-3 sm:grid-cols-2 text-muted-foreground">
                 <InfoRow icon={<User className="h-4 w-4" />} label="Full Name" value={displayName || "-"} />
                 <InfoRow icon={<CalendarDays className="h-4 w-4" />} label="Date of Birth" value={student?.dob || "-"} />
+                <InfoRow icon={<BookHeart className="h-4 w-4" />} label="Age" value={student?.age || "-"} />
                 <InfoRow icon={<BadgeCheck className="h-4 w-4" />} label="Gender" value={student?.gender || "-"} />
                 <InfoRow icon={<ShieldCheck className="h-4 w-4" />} label="Status" value={student?.status || "-"} />
                 <InfoRow icon={<IdCard className="h-4 w-4" />} label="Class" value={student?.class_id || "-"} />

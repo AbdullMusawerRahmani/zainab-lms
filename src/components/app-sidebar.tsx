@@ -219,14 +219,24 @@ const data = {
         },
       ],
     },
-  ],
-  Academics: [
-    {
-      name: "User & Roles ",
-      url: "/user&role",
+     {
+      title: "User Management",
+      url: "#",
       icon: UserCog,
+      items: [
+          {
+          title: "User & Roles",
+          icon: UserCog,
+          url: "/user&role",
+        },
+    
+      ],
     },
+      
+      
+    
   ],
+
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -237,7 +247,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavProjects projects={data.Academics} />
+        
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />

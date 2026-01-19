@@ -1,112 +1,94 @@
-"use server";
+"use client";
 
 import { fetchAPI } from "@/lib/api";
-import type { User, CreateUserRequest, UpdateUserRequest } from "@/types/dashboard/user";
 
-const USER_ENDPOINT = "/student/api/v1/users/";
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+}
 
-// --- Fetch all users ---
-export const fetchUsers = async (): Promise<User[]> => {
-  const res = await fetchAPI<User[]>(USER_ENDPOINT, { method: "GET" });
+// Base endpoints
+const USER_ENDPOINT = "/users/signup/";
+const USER_DETAIL_ENDPOINT = (id: number) => `/users/signup/${id}/`;
 
-  console.log("fetchUsers response:", res);
+/**
+ * Fetch all users
+ */
+export async function fetchUsers(): Promise<User[]> {
+  const res = await fetchAPI<User[]>(USER_ENDPOINT, { requiresAuth: true });
 
-  if (!res.success) throw new Error(res.error || "Failed to fetch users");
+  if (!res.success) {
+    console.error("Failed to fetch users:", res.error);
+    throw new Error(res.error || "Failed to fetch users");
+  }
 
   return res.data || [];
-};
+}
 
-// --- Fetch single user by ID ---
-export const fetchUserById = async (id: string): Promise<User> => {
-  const res = await fetchAPI<User>(`${USER_ENDPOINT}${id}/`, { method: "GET" });
-
-  console.log("fetchUserById response:", res);
-
-  if (!res.success) throw new Error(res.error || "Failed to fetch user");
-
-  return res.data!;
-};
-
-// --- Create new user ---
-export const createUser = async (user: CreateUserRequest): Promise<User> => {
+/**
+ * Create a new user
+ */
+export async function createUser(data: {
+  username: string;
+  email: string;
+  password: string;
+  role: string;
+}): Promise<User> {
   const res = await fetchAPI<User>(USER_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(user),
+    requiresAuth: true,
+    body: data,
   });
 
-  console.log("createUser response:", res);
-
-  if (!res.success) throw new Error(res.error || "Failed to create user");
+  if (!res.success) {
+    console.error("Failed to create user:", res.error);
+    throw new Error(res.error || "Failed to create user");
+  }
 
   return res.data!;
-};
+}
 
-// --- Update user completely (PUT) ---
-export const updateUser = async (id: string, user: UpdateUserRequest): Promise<User> => {
-  const res = await fetchAPI<User>(`${USER_ENDPOINT}${id}/`, {
+/**
+ * Update an existing user
+ */
+export async function updateUser(
+  id: number,
+  data: {
+    username?: string;
+    email?: string;
+    password?: string;
+    role?: string;
+  }
+): Promise<User> {
+  const res = await fetchAPI<User>(USER_DETAIL_ENDPOINT(id), {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(user),
+    requiresAuth: true,
+    body: data,
   });
 
-  console.log("updateUser response:", res);
-
-  if (!res.success) throw new Error(res.error || "Failed to update user");
+  if (!res.success) {
+    console.error(`Failed to update user ${id}:`, res.error);
+    throw new Error(res.error || "Failed to update user");
+  }
 
   return res.data!;
-};
+}
 
-// --- Partial update (PATCH) ---
-export const patchUser = async (id: string, user: Partial<UpdateUserRequest>): Promise<User> => {
-  const res = await fetchAPI<User>(`${USER_ENDPOINT}${id}/`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(user),
+/**
+ * Delete a user
+ */
+export async function deleteUser(id: number): Promise<boolean> {
+  const res = await fetchAPI<void>(USER_DETAIL_ENDPOINT(id), {
+    method: "DELETE",
+    requiresAuth: true,
   });
 
-  console.log("patchUser response:", res);
+  if (!res.success) {
+    console.error(`Failed to delete user ${id}:`, res.error);
+    throw new Error(res.error || "Failed to delete user");
+  }
 
-  if (!res.success) throw new Error(res.error || "Failed to patch user");
-
-  return res.data!;
-};
-
-// --- Delete user ---
-export const deleteUser = async (id: string): Promise<void> => {
-  const res = await fetchAPI(`${USER_ENDPOINT}${id}/`, { method: "DELETE" });
-
-  console.log("deleteUser response:", res);
-
-  if (!res.success) throw new Error(res.error || "Failed to delete user");
-};
-
-// --- Assign roles to user ---
-export const assignUserRole = async (userId: string, roles: string[]): Promise<User> => {
-  const res = await fetchAPI<User>(`${USER_ENDPOINT}${userId}/assign-role/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roles }),
-  });
-
-  console.log("assignUserRole response:", res);
-
-  if (!res.success) throw new Error(res.error || "Failed to assign role");
-
-  return res.data!;
-};
-
-// --- Remove roles from user ---
-export const removeUserRole = async (userId: string, roles: string[]): Promise<User> => {
-  const res = await fetchAPI<User>(`${USER_ENDPOINT}${userId}/remove-role/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roles }),
-  });
-
-  console.log("removeUserRole response:", res);
-
-  if (!res.success) throw new Error(res.error || "Failed to remove role");
-
-  return res.data!;
-};
+  return true;
+}

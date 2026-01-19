@@ -23,6 +23,7 @@ export default function EditStudentPage() {
     father_name: "",
     grand_father_name: "",
     dob: "",
+    age: "",
     gender: "male",
     address: "",
     primary_mobile: "",
@@ -167,7 +168,12 @@ export default function EditStudentPage() {
                       <input type="text" name="grand_father_name" value={formData.grand_father_name} onChange={handleChange} className={inputClasses} />
                     </div>
 
-                    <div className="sm:col-span-2">
+                    <div>
+                      <label className="font-medium">Age</label>
+                      <input type="text" name="age" value={formData.age} onChange={handleChange} className={inputClasses} />
+                    </div>
+
+                    <div >
                       <label className="font-medium">Class *</label>
                       <select name="class_id" value={formData.class_id} onChange={handleChange} className={inputClasses}>
                         <option value="">{loadingClasses ? "Loading classes..." : "Select a Class"}</option>
